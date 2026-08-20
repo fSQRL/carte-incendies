@@ -83,7 +83,7 @@ def verifie_entrees(nom, cle, entrees):
 def main():
     evac = charge("evacuations.json")
     if evac is not None:
-        for cle in ("evacuations", "retours"):
+        for cle in ("evacuations", "historique", "retours"):
             if cle not in evac:
                 if cle == "evacuations":
                     err("evacuations.json", "racine", "clé `evacuations` absente")
@@ -104,7 +104,7 @@ def main():
         print("\nVoir le format attendu dans .github/PULL_REQUEST_TEMPLATE.md", file=sys.stderr)
         return 1
 
-    n = len(evac.get("evacuations", [])) + len(evac.get("retours", [])) if evac else 0
+    n = sum(len(evac.get(c, [])) for c in ("evacuations", "historique", "retours")) if evac else 0
     print(f"✓ données valides — {n} entrées vérifiées")
     return 0
 

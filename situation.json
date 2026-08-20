@@ -1,6 +1,8 @@
 {
-  "updated": "2026-07-26T14:35:22Z",
-  "zones": [
+  "_comment": "Situation officielle tenue à la main : `zones` = feux/operations EN COURS uniquement (le front marque comme possiblement obsolete toute zone dont `maj` a plus de 10 jours) ; `historique` = feux de la saison termines, affiches dans la section repliable du panneau.",
+  "updated": "2026-08-20T00:00:00Z",
+  "zones": [],
+  "historique": [
     {
       "nom": "Feu de Saumos",
       "dept": "Gironde / Landes (33-40)",
@@ -20,7 +22,10 @@
       "habitations_detruites": 240,
       "maj": "2026-07-26 13:00",
       "sources": [
-        {"url": "https://www.bougerabordeaux.com/actu/news/incendie-en-gironde-le-point-officiel-a-13-h-ce-dimanche-26-juillet/", "titre": "Prefecture de la Gironde — point officiel 26/07 13h"}
+        {
+          "url": "https://www.bougerabordeaux.com/actu/news/incendie-en-gironde-le-point-officiel-a-13-h-ce-dimanche-26-juillet/",
+          "titre": "Prefecture de la Gironde — point officiel 26/07 13h"
+        }
       ]
     },
     {
@@ -42,7 +47,10 @@
       "habitations_detruites": null,
       "maj": "2026-07-26",
       "sources": [
-        {"url": "https://france3-regions.franceinfo.fr/nouvelle-aquitaine/", "titre": "France 3 Nouvelle-Aquitaine — 26/07 (pompiers datant du 24/07)"}
+        {
+          "url": "https://france3-regions.franceinfo.fr/nouvelle-aquitaine/",
+          "titre": "France 3 Nouvelle-Aquitaine — 26/07 (pompiers datant du 24/07)"
+        }
       ]
     },
     {
@@ -64,7 +72,10 @@
       "habitations_detruites": null,
       "maj": "2026-07-26",
       "sources": [
-        {"url": "https://www.frequence-sud.fr/art-112078-nouveau_bilan_a_4500ha__retour_du_mistral__les_informations_sur_l_incendie_du_gros_bessillon_ce_dimanche_ponteves", "titre": "Frequence-Sud — nouveau bilan 4500 ha, incendie du Gros Bessillon 26/07"}
+        {
+          "url": "https://www.frequence-sud.fr/art-112078-nouveau_bilan_a_4500ha__retour_du_mistral__les_informations_sur_l_incendie_du_gros_bessillon_ce_dimanche_ponteves",
+          "titre": "Frequence-Sud — nouveau bilan 4500 ha, incendie du Gros Bessillon 26/07"
+        }
       ]
     },
     {
@@ -86,7 +97,10 @@
       "habitations_detruites": null,
       "maj": "2026-07-26",
       "sources": [
-        {"url": "https://www.corsenetinfos.corsica/Corte-300-hommes-pour-faire-face-a-l-incendie_a91874.html", "titre": "Corsenetinfos — Corte, 300 hommes face a l'incendie"}
+        {
+          "url": "https://www.corsenetinfos.corsica/Corte-300-hommes-pour-faire-face-a-l-incendie_a91874.html",
+          "titre": "Corsenetinfos — Corte, 300 hommes face a l'incendie"
+        }
       ]
     },
     {
@@ -108,7 +122,10 @@
       "habitations_detruites": null,
       "maj": "2026-07-26",
       "sources": [
-        {"url": "https://www.corsenetinfos.corsica/", "titre": "France 3 Corse / Corsenetinfos — 26/07 (2 avions bombardiers, type non precise)"}
+        {
+          "url": "https://www.corsenetinfos.corsica/",
+          "titre": "France 3 Corse / Corsenetinfos — 26/07 (2 avions bombardiers, type non precise)"
+        }
       ]
     }
   ]

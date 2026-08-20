@@ -1287,6 +1287,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._send_json({
                 "evacuations": evacuations,
                 "zones": zones,
+                "zones_historique": situation.get("historique", []) if situation else [],
                 "zones_updated": situation.get("updated") if situation else None,
                 "total_national_ha": situation.get("total_national_ha") if situation else None,
                 "total_national_note": situation.get("total_national_note") if situation else None,

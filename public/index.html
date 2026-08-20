@@ -292,10 +292,14 @@ h2{
 .moyens span{display:inline-flex;align-items:center;gap:4px}
 .zmeta{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:9px;line-height:1.7}
 .zmeta a{color:var(--dim)}
+.zcard .stale{font-family:var(--mono);font-size:10px;color:var(--bad);margin-top:8px}
+.zcard.hist{opacity:.75}
+.zcard.hist .nm{font-weight:500;color:var(--dim)}
+.zcard.hist .ha{color:var(--dim)}
 
 /* communes évacuées */
 .evac-item{
-  display:flex;align-items:baseline;gap:8px;padding:8px 0;
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;padding:8px 0;
   border-bottom:1px solid var(--line);cursor:pointer;font-size:12px;
 }
 .evac-item:last-child{border-bottom:none}
@@ -303,6 +307,11 @@ h2{
 .evac-item .cm{font-weight:600}
 .evac-item .dp{font-family:var(--mono);font-size:11px;color:var(--faint)}
 .evac-item .stt{font-family:var(--mono);font-size:10px;color:var(--ember);margin-left:auto;white-space:nowrap}
+.evac-item .stale{flex-basis:100%;font-family:var(--mono);font-size:10px;color:var(--bad)}
+.evac-item.hist .cm{color:var(--dim);font-weight:500}
+.evac-item.hist .stt{color:var(--faint)}
+.evac-hist{margin-top:10px}
+.evac-hist summary{font-family:var(--mono);font-size:11px;color:var(--faint);cursor:pointer}
 
 .empty{font-size:12px;color:var(--faint);font-style:italic;line-height:1.5}
 
@@ -761,7 +770,7 @@ document.getElementById('hud-toggle').addEventListener('click', () => {
 let allPoints = [];        // détections (chaque point porte _ms = epoch)
 let foyers    = [];        // foyers agrégés
 let feedsMeta = [];        // flux satellites
-let situation = {evac:[], evacUpdated:null, zones:[]};
+let situation = {evac:[], evacHist:[], evacUpdated:null, zones:[], zonesHist:[]};
 let meteoByFoyer = {};     // id -> current météo Open-Meteo
 let forecastByFoyer = {};  // id -> hourly (12 h) Open-Meteo
 let meteoFetchedAt = null; // Date de la dernière récupération météo
@@ -1893,13 +1902,20 @@ function renderFoyersPanel(){
 }
 function renderZonesPanel(){
   const box = document.getElementById('zones-list');
-  if (!situation.zones.length){ box.innerHTML = '<div class="empty">Aucune zone documentée par les autorités pour l\'instant.</div>'; return; }
-  box.innerHTML = situation.zones.map(z => {
+  // Une zone dont `maj` a plus de 10 jours sans mise à jour du fichier est
+  // probablement terminée : on la garde affichée mais signalée comme telle.
+  const STALE_MS = 10 * 864e5;
+  const stale = z => {
+    const m = /(\d{4}-\d{2}-\d{2})/.exec(z.maj || '');
+    return (m && Date.now() - Date.parse(m[1] + 'T00:00:00Z') > STALE_MS)
+      ? `<div class="stale">⚠ dernier point officiel du ${esc(m[1])} — possiblement obsolète, vérifier auprès de la préfecture</div>` : '';
+  };
+  const card = (z, hist) => {
     const mo = z.moyens || {};
     const srcs = (z.sources && z.sources.length)
       ? z.sources.map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.titre || host(s.url))}</a>`).join(' · ')
       : 'n.c.';
-    return `<div class="zcard">
+    return `<div class="zcard${hist ? ' hist' : ''}">
       <div class="nm">${esc(z.nom || 'Zone')}${z.dept ? ' <span style="color:var(--faint);font-family:var(--mono);font-size:11px">(' + esc(z.dept) + ')</span>' : ''}</div>
       <div class="ha">${nc(z.hectares, ' ha')} officiels</div>
       <div class="moyens">
@@ -1910,9 +1926,19 @@ function renderZonesPanel(){
         <span>🚁 ${nc(mo.helicopteres)}</span>
         <span>✈️ ${nc(mo.a400m)} A400M</span>
       </div>
-      <div class="zmeta">màj ${esc(z.maj || 'n.c.')} · ${srcs}</div>
+      ${hist ? '' : stale(z)}
+      <div class="zmeta">${hist ? 'dernier point ' : 'màj '}${esc(z.maj || 'n.c.')} · ${srcs}</div>
     </div>`;
-  }).join('');
+  };
+  let html = situation.zones.length
+    ? situation.zones.map(z => card(z, false)).join('')
+    : '<div class="empty">Aucun feu majeur documenté par les autorités actuellement.</div>';
+  if (situation.zonesHist.length) html += `
+    <details class="evac-hist">
+      <summary>Historique de la saison — ${situation.zonesHist.length} feux terminés</summary>
+      ${situation.zonesHist.map(z => card(z, true)).join('')}
+    </details>`;
+  box.innerHTML = html;
 }
 
 /* Moyenne circulaire de directions (degrés) et écart angulaire */
@@ -1970,15 +1996,33 @@ function renderForecastPanel(){
 }
 function renderEvacPanel(){
   const box = document.getElementById('evac-list');
-  if (!situation.evac.length){ box.innerHTML = '<div class="empty">Aucune évacuation signalée pour l\'instant.</div>'; return; }
-  box.innerHTML = situation.evac.map((e, i) => `
-    <div class="evac-item" data-i="${i}">
+  // Une évacuation annoncée il y a plus de 10 jours sans mise à jour du fichier
+  // est probablement levée : on la garde affichée mais signalée comme telle.
+  const STALE_MS = 10 * 864e5;
+  const stale = e => {
+    const m = /(\d{4}-\d{2}-\d{2})/.exec(e.annonce || '');
+    return (m && Date.now() - Date.parse(m[1] + 'T00:00:00Z') > STALE_MS)
+      ? `<span class="stale">⚠ annonce du ${esc(m[1])} — possiblement obsolète, vérifier auprès de la préfecture</span>` : '';
+  };
+  const item = (e, l, i) => `
+    <div class="evac-item${l === 'h' ? ' hist' : ''}" data-l="${l}" data-i="${i}">
       <span class="cm">${esc(e.commune || '—')}</span>
       <span class="dp">${esc(e.dept || '')}</span>
       <span class="stt">${esc(e.statut || '')}</span>
-    </div>`).join('');
+      ${l === 'h' ? '' : stale(e)}
+    </div>`;
+  let html = situation.evac.length
+    ? situation.evac.map((e, i) => item(e, 'a', i)).join('')
+    : '<div class="empty">Aucune évacuation en cours actuellement.</div>';
+  if (situation.evacHist.length) html += `
+    <details class="evac-hist">
+      <summary>Historique de la saison — ${situation.evacHist.length} évacuations levées</summary>
+      ${situation.evacHist.map((e, i) => item(e, 'h', i)).join('')}
+    </details>`;
+  box.innerHTML = html;
   box.querySelectorAll('.evac-item').forEach(el => el.addEventListener('click', () => {
-    const e = situation.evac[+el.dataset.i]; if (!e || e.lat == null || e.lon == null) return;
+    const list = el.dataset.l === 'h' ? situation.evacHist : situation.evac;
+    const e = list[+el.dataset.i]; if (!e || e.lat == null || e.lon == null) return;
     map.flyTo({center:[e.lon, e.lat], zoom:10});
   }));
 }
@@ -2239,8 +2283,10 @@ async function loadSituation(){
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     situation.evac        = (d.evacuations && Array.isArray(d.evacuations.evacuations)) ? d.evacuations.evacuations : [];
+    situation.evacHist    = (d.evacuations && Array.isArray(d.evacuations.historique)) ? d.evacuations.historique : [];
     situation.evacUpdated = d.evacuations ? d.evacuations.updated : null;
     situation.zones       = Array.isArray(d.zones) ? d.zones : [];
+    situation.zonesHist   = Array.isArray(d.zones_historique) ? d.zones_historique : [];
     renderZonesPanel();
     renderEvacPanel();
     renderEvac();
