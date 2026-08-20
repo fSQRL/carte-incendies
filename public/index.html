@@ -310,6 +310,8 @@ h2{
 .evac-item:hover .cm{color:var(--fire)}
 .evac-item .cm{font-weight:600}
 .evac-item .dp{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.evac-item .dt{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.fcard .nm .dp{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--faint)}
 .evac-item .stt{font-family:var(--mono);font-size:10px;color:var(--ember);margin-left:auto;white-space:nowrap}
 .evac-item .stale{flex-basis:100%;font-family:var(--mono);font-size:10px;color:var(--bad)}
 .evac-item.hist .cm{color:var(--dim);font-weight:500}
@@ -813,7 +815,12 @@ let playing = false, playTimer = null;
    Formatage
    ============================================================ */
 const fmtHM    = new Intl.DateTimeFormat('fr-FR', {timeZone:'Europe/Paris', hour:'2-digit', minute:'2-digit'});
-const fmtStamp = new Intl.DateTimeFormat('fr-FR', {timeZone:'Europe/Paris', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+/* Un seul format de date affichée, AAAA-MM-JJ, celui des fichiers de données
+   et des communiqués — l'année comprise, un site qui dure en a besoin (#24).
+   'sv-SE' rend l'ISO nativement là où 'fr-FR' impose JJ/MM. */
+const fmtStamp = new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+/* Date ISO portée par un champ en texte libre ("2026-07-25 (soir)"). */
+const dateISO = s => (/(\d{4}-\d{2}-\d{2})/.exec(s || '') || [])[1] || '';
 const fmtInt   = new Intl.NumberFormat('fr-FR');  // séparateur de milliers (espace)
 
 function ago(ms){
@@ -1901,7 +1908,11 @@ function renderFoyersPanel(){
   if (!list.length){ box.innerHTML = '<div class="empty">Aucun foyer actif détecté sur les dernières heures.</div>'; return; }
   const idx = forecastIndex(Date.now(), currentT());
   box.innerHTML = list.map(f => {
-    const nm = f.nom ? 'Foyer de ' + esc(f.nom) : 'Foyer ' + f.lat.toFixed(3) + ', ' + f.lon.toFixed(3);
+    // Département accolé au nom : « Saint-Jean » ne suffit pas à situer un
+    // foyer, et les homonymes de communes sont nombreux (issue #26).
+    const nm = f.nom
+      ? 'Foyer de ' + esc(f.nom) + (f.dept ? ` <span class="dp">${esc(f.dept)}</span>` : '')
+      : 'Foyer ' + f.lat.toFixed(3) + ', ' + f.lon.toFixed(3);
     const m = meteoByFoyer[f.id];
     const meteoLine = m
       ? `<br>🌬 ${Math.round(m.wind_speed_10m)} km/h · rafales ${Math.round(m.wind_gusts_10m)} km/h`
@@ -1935,9 +1946,9 @@ function renderZonesPanel(){
   // probablement terminée : on la garde affichée mais signalée comme telle.
   const STALE_MS = 10 * 864e5;
   const stale = z => {
-    const m = /(\d{4}-\d{2}-\d{2})/.exec(z.maj || '');
-    return (m && Date.now() - Date.parse(m[1] + 'T00:00:00Z') > STALE_MS)
-      ? `<div class="stale">⚠ dernier point officiel du ${esc(m[1])} — possiblement obsolète, vérifier auprès de la préfecture</div>` : '';
+    const d = dateISO(z.maj);
+    return (d && Date.now() - Date.parse(d + 'T00:00:00Z') > STALE_MS)
+      ? `<div class="stale">⚠ dernier point officiel du ${esc(d)} — possiblement obsolète, vérifier auprès de la préfecture</div>` : '';
   };
   const card = (z, hist) => {
     const mo = z.moyens || {};
@@ -2029,24 +2040,31 @@ function renderEvacPanel(){
   // est probablement levée : on la garde affichée mais signalée comme telle.
   const STALE_MS = 10 * 864e5;
   const stale = e => {
-    const m = /(\d{4}-\d{2}-\d{2})/.exec(e.annonce || '');
-    return (m && Date.now() - Date.parse(m[1] + 'T00:00:00Z') > STALE_MS)
-      ? `<span class="stale">⚠ annonce du ${esc(m[1])} — possiblement obsolète, vérifier auprès de la préfecture</span>` : '';
+    const d = dateISO(e.annonce);
+    return (d && Date.now() - Date.parse(d + 'T00:00:00Z') > STALE_MS)
+      ? `<span class="stale">⚠ annonce du ${esc(d)} — possiblement obsolète, vérifier auprès de la préfecture</span>` : '';
   };
   const item = (e, l, i) => `
     <div class="evac-item${l === 'h' ? ' hist' : ''}" data-l="${l}" data-i="${i}">
       <span class="cm">${esc(e.commune || '—')}</span>
+      <span class="dt">${esc(dateISO(e.annonce) || 'date n.c.')}</span>
       <span class="dp">${esc(e.dept || '')}</span>
       <span class="stt">${esc(e.statut || '')}</span>
       ${l === 'h' ? '' : stale(e)}
     </div>`;
+  /* Plus récent en tête (#27). Le tri porte sur des couples {entrée, index
+     d'origine} : les indices servent de clé au clic, ils ne doivent pas suivre
+     l'ordre d'affichage. */
+  const parDate = list => list
+    .map((e, i) => ({e, i}))
+    .sort((a, b) => dateISO(b.e.annonce).localeCompare(dateISO(a.e.annonce)));
   let html = situation.evac.length
-    ? situation.evac.map((e, i) => item(e, 'a', i)).join('')
+    ? parDate(situation.evac).map(({e, i}) => item(e, 'a', i)).join('')
     : '<div class="empty">Aucune évacuation en cours actuellement.</div>';
   if (situation.evacHist.length) html += `
     <details class="evac-hist">
       <summary>Historique de la saison — ${situation.evacHist.length} évacuations levées</summary>
-      ${situation.evacHist.map((e, i) => item(e, 'h', i)).join('')}
+      ${parDate(situation.evacHist).map(({e, i}) => item(e, 'h', i)).join('')}
     </details>`;
   box.innerHTML = html;
   box.querySelectorAll('.evac-item').forEach(el => el.addEventListener('click', () => {

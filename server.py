@@ -261,28 +261,35 @@ def _parse_utc(s):
 
 
 def reverse_geocode(lat, lon):
-    """Nom de la commune la plus proche via geo.api.gouv.fr.
+    """Commune la plus proche via geo.api.gouv.fr : (nom, département).
 
-    Cache en mémoire par cellule 0.02° arrondie. Échec / timeout -> None.
+    Le département est rendu au format "Nom (NN)", le même que dans
+    evacuations.json, pour lever l'ambiguïté des homonymes dans la liste des
+    foyers (issue #26). Cache en mémoire par cellule 0.02° arrondie.
+    Échec / timeout -> (None, None).
     """
     key = (round(lat / FOYER_GRID), round(lon / FOYER_GRID))
     with _geo_lock:
         if key in _geo_cache:
             return _geo_cache[key]
-    nom = None
+    nom, dept = None, None
     try:
-        qs = urllib.parse.urlencode({"lat": f"{lat:.5f}", "lon": f"{lon:.5f}", "fields": "nom"})
+        qs = urllib.parse.urlencode({"lat": f"{lat:.5f}", "lon": f"{lon:.5f}",
+                                     "fields": "nom,departement"})
         url = f"https://geo.api.gouv.fr/communes?{qs}"
         req = urllib.request.Request(url, headers={"User-Agent": "carte-incendies-local/1.0"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         if isinstance(data, list) and data:
             nom = data[0].get("nom")
+            d = data[0].get("departement") or {}
+            if d.get("nom") and d.get("code"):
+                dept = f"{d['nom']} ({d['code']})"
     except Exception:
-        nom = None
+        nom, dept = None, None
     with _geo_lock:
-        _geo_cache[key] = nom
-    return nom
+        _geo_cache[key] = (nom, dept)
+    return nom, dept
 
 
 def cluster_foyers(points):
@@ -353,6 +360,7 @@ def cluster_foyers(points):
             "est_area_ha": est_area_ha,
             "active": active,
             "nom": None,
+            "dept": None,
             # Rétention temporaire des points de la composante (retirée avant
             # le return pour rester JSON-sérialisable).
             "_pts": comp_points,
@@ -373,7 +381,7 @@ def cluster_foyers(points):
     # Reverse-geocoding limité aux foyers actifs ou >= FOYER_GEOCODE_MIN_N
     for f in foyers:
         if f["active"] or f["n"] >= FOYER_GEOCODE_MIN_N:
-            f["nom"] = reverse_geocode(f["lat"], f["lon"])
+            f["nom"], f["dept"] = reverse_geocode(f["lat"], f["lon"])
 
     return foyers
 
