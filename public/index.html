@@ -39,7 +39,12 @@
   --txt:#e8e4dc; --dim:#8b949e; --faint:#4d5760;
   --fire:#ff4820; --ember:#ff8c1a; --warm:#ffc93c; --cool:#6b7684;
   --ok:#3fd68f; --bad:#ff5470;
-  --burn:#3d2b1f;
+  /* Zones brûlées : la palette suit la clarté du FOND DE CARTE, pas le thème
+     (outdoors reste clair en thème sombre, l'imagerie satellite reste sombre
+     dans les deux) — cf. burnStyle() et issue #25. */
+  --burn-light:#6b4a35; --burn-light-line:#40291a;
+  --burn-dark:#c98a5b;  --burn-dark-line:#eab488;
+  --burn-sat:#f0d5b8;   --burn-sat-line:#fff4e8;
   --panel-grad:linear-gradient(180deg,rgba(18,22,27,.97),rgba(11,14,17,.97));
   --notice-bg:rgba(255,140,26,.06); --notice-line:rgba(255,140,26,.25);
   --chip-on-bg:rgba(255,72,32,.14);
@@ -56,7 +61,6 @@ body.light{
   --txt:#1d1a15; --dim:#5d564a; --faint:#978f80;
   --fire:#e03400; --ember:#e07800; --warm:#c79a00; --cool:#8a94a3;
   --ok:#1a9c62; --bad:#d42a52;
-  --burn:#6b4a35;
   --panel-grad:linear-gradient(180deg,rgba(250,248,244,.97),rgba(242,239,233,.97));
   --notice-bg:rgba(224,120,0,.07); --notice-line:rgba(224,120,0,.35);
   --chip-on-bg:rgba(224,52,0,.1);
@@ -867,11 +871,29 @@ function colors(){
     ember:s.getPropertyValue('--ember').trim(),
     warm: s.getPropertyValue('--warm').trim(),
     cool: s.getPropertyValue('--cool').trim(),
-    burn: s.getPropertyValue('--burn').trim(),
     txt:  s.getPropertyValue('--txt').trim(),
     bg:   s.getPropertyValue('--bg').trim(),
     panel:s.getPropertyValue('--panel').trim(),
   };
+}
+
+/* Périmètres EFFIS : le contraste se joue contre le fond de carte, pas contre
+   le thème du panneau. Trois cas — fond clair (streets, outdoors), fond sombre
+   (dark-v11) et imagerie satellite, où un brun se confond avec le sol nu et où
+   seul un liseré très clair, façon cendre, ressort. Issue #25. */
+function burnStyle(){
+  const s = getComputedStyle(document.body);
+  const v = n => s.getPropertyValue(n).trim();
+  if (currentBase === 'sat')
+    return {fill:v('--burn-sat'), line:v('--burn-sat-line'), fillOp:0.26, lineOp:0.95, w:1.8};
+  if (currentBase === 'plan' && theme === 'dark')
+    return {fill:v('--burn-dark'), line:v('--burn-dark-line'), fillOp:0.34, lineOp:0.92, w:1.6};
+  return {fill:v('--burn-light'), line:v('--burn-light-line'), fillOp:0.32, lineOp:0.85, w:1.2};
+}
+/* Les contours NRT (frais, sans date ni surface) restent en retrait des
+   périmètres datés — même rapport qu'avant, quel que soit le fond. */
+function burnOpacity(base){
+  return ['case', ['==',['get','kind'],'nrt'], +(base * 0.55).toFixed(3), base];
 }
 
 /* Code couleur par catégorie de moyen aérien (spec). `autre` passe au gris
@@ -1069,11 +1091,12 @@ function installLayers(){
 
   // --- couches, dans l'ordre : burned < hulls < fires < cones < (labels) < wind ---
   if (map.getSource('burned') && !map.getLayer('burned-fill')){
+    const b = burnStyle();
     map.addLayer({id:'burned-fill', type:'fill', source:'burned',
-      paint:{'fill-color':colors().burn, 'fill-opacity':['case',['==',['get','kind'],'nrt'],0.16,0.30]}}, before);
+      paint:{'fill-color':b.fill, 'fill-opacity':burnOpacity(b.fillOp)}}, before);
     map.addLayer({id:'burned-line', type:'line', source:'burned',
-      paint:{'line-color':colors().burn, 'line-width':1,
-        'line-opacity':['case',['==',['get','kind'],'nrt'],0.4,0.7]}}, before);
+      paint:{'line-color':b.line, 'line-width':b.w,
+        'line-opacity':burnOpacity(b.lineOp)}}, before);
   }
   if (!map.getLayer('hulls-fill')){
     map.addLayer({id:'hulls-fill', type:'fill', source:'hulls',
@@ -1195,8 +1218,14 @@ function applyDataColors(){
   if (map.getLayer('hulls-line')) map.setPaintProperty('hulls-line','line-color', c.fire);
   if (map.getLayer('cones-fill')) map.setPaintProperty('cones-fill','fill-color', c.ember);
   if (map.getLayer('cones-line')) map.setPaintProperty('cones-line','line-color', c.ember);
-  if (map.getLayer('burned-fill')) map.setPaintProperty('burned-fill','fill-color', c.burn);
-  if (map.getLayer('burned-line')) map.setPaintProperty('burned-line','line-color', c.burn);
+  if (map.getLayer('burned-fill')){
+    const b = burnStyle();
+    map.setPaintProperty('burned-fill','fill-color', b.fill);
+    map.setPaintProperty('burned-fill','fill-opacity', burnOpacity(b.fillOp));
+    map.setPaintProperty('burned-line','line-color', b.line);
+    map.setPaintProperty('burned-line','line-width', b.w);
+    map.setPaintProperty('burned-line','line-opacity', burnOpacity(b.lineOp));
+  }
   if (map.getLayer('foyers-icon')){
     map.setPaintProperty('foyers-icon','text-color', c.txt);
     map.setPaintProperty('foyers-icon','text-halo-color', c.bg);
@@ -2682,11 +2711,12 @@ async function loadBurnedIfNeeded(){
     if (!map.getSource('burned')){
       const before = firstSymbolId();
       map.addSource('burned', {type:'geojson', data:burnedData});
+      const b = burnStyle(), sous = map.getLayer('hulls-fill') ? 'hulls-fill' : before;
       map.addLayer({id:'burned-fill', type:'fill', source:'burned',
-        paint:{'fill-color':colors().burn, 'fill-opacity':['case',['==',['get','kind'],'nrt'],0.16,0.30]}}, map.getLayer('hulls-fill') ? 'hulls-fill' : before);
+        paint:{'fill-color':b.fill, 'fill-opacity':burnOpacity(b.fillOp)}}, sous);
       map.addLayer({id:'burned-line', type:'line', source:'burned',
-        paint:{'line-color':colors().burn, 'line-width':1,
-        'line-opacity':['case',['==',['get','kind'],'nrt'],0.4,0.7]}}, map.getLayer('hulls-fill') ? 'hulls-fill' : before);
+        paint:{'line-color':b.line, 'line-width':b.w,
+        'line-opacity':burnOpacity(b.lineOp)}}, sous);
     }
     applyLayerVisibility();
   }catch(e){ /* fichier indisponible : on n'affiche rien plutôt qu'inventer */ }
