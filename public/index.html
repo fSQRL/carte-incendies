@@ -312,7 +312,15 @@ h2{
 .evac-item .dp{font-family:var(--mono);font-size:11px;color:var(--faint)}
 .evac-item .dt{font-family:var(--mono);font-size:11px;color:var(--dim)}
 .fcard .nm .dp{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--faint)}
-.evac-item .stt{font-family:var(--mono);font-size:10px;color:var(--ember);margin-left:auto;white-space:nowrap}
+/* Les arrêtés du Var énumèrent les quartiers sur plusieurs lignes : le statut
+   prend toute la largeur, garde ses retours à la ligne et se limite à trois
+   lignes — le texte entier reste dans la bulle de la carte. */
+.evac-item .stt{
+  flex-basis:100%;margin-top:3px;
+  font-family:var(--mono);font-size:10px;color:var(--ember);
+  white-space:pre-line;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
 .evac-item .stale{flex-basis:100%;font-family:var(--mono);font-size:10px;color:var(--bad)}
 .evac-item.hist .cm{color:var(--dim);font-weight:500}
 .evac-item.hist .stt{color:var(--faint)}
